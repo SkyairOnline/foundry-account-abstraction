@@ -6,11 +6,40 @@ import {PackedUserOperation} from "lib/account-abstraction/contracts/interfaces/
 import {HelperConfig} from "script/HelperConfig.s.sol";
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {MinimalAccount} from "src/ethereum/MinimalAccount.sol";
 
 contract SendPackedUserOp is Script {
     using MessageHashUtils for bytes32;
 
-    function run() public {}
+    function run() public {
+        HelperConfig helperConfig = new HelperConfig();
+        address dest = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789; // arbitrum mainet USDC address
+        uint256 value = 0;
+        bytes memory functionData = abi.encodeWithSelector(
+            IERC20.approve.selector,
+            0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789,
+            1e18
+        );
+        bytes memory executeCalldata = abi.encodeWithSelector(
+            MinimalAccount.execute.selector,
+            dest,
+            value,
+            functionData
+        );
+        PackedUserOperation memory userOp = generateSignedUserOperation(
+            executeCalldata,
+            helperConfig.getConfig(),
+            0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+        );
+        PackedUserOperation[] memory ops = new PackedUserOperation[](1);
+        ops[0] = userOp;
+
+        vm.startBroadcast();
+        IEntryPoint(helperConfig.getConfig().entryPoint)
+            .handleOps(ops, payable(helperConfig.getConfig().account));
+        vm.stopBroadcast();
+    }
 
     function generateSignedUserOperation(
         bytes memory callData,
